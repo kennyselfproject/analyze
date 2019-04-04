@@ -5,10 +5,11 @@
 
 typedef struct tagRow
 {
-    int   cols;
-    int   colmax;
-    int   nozeros;
-    char *colvalues[0];
+    int     cols;
+    int     colmax;
+    int     nozeros;
+    double  total;
+    char   *colvalues[0];
 }Row;
 
 typedef struct tagTable
@@ -41,7 +42,7 @@ int main(int argc, char *argv[])
     long  fileSize = 0;
     char *buffer = NULL;
     int   filterId = 1;
-    char *filter = (char*)"PADI4";
+    char *filter = NULL;
 
     switch(argc)
     {
@@ -84,11 +85,13 @@ error:
 
 char *handle_one_row_in_buffer(char *buffer, long size, Row *row, int *colnum)
 {
-    char *start = buffer;
-    char *cur = buffer;
-    char *end = buffer + size;
-    int   num = 0;
-    int   zeros = 0;
+    static int head = 1;
+    char   *start = buffer;
+    char   *cur = buffer;
+    char   *end = buffer + size;
+    int     num = 0;
+    double  total = 0;
+    int     zeros = 0;
     
     for (cur = buffer; cur < end; cur++)
     {
@@ -98,14 +101,22 @@ char *handle_one_row_in_buffer(char *buffer, long size, Row *row, int *colnum)
         case '\t':
         case '\0':
             if (row != NULL)
+	    {
                 *cur = '\0';
+		if (head != 1 && num > 1)
+		  total += atof(start);
+	    }
             start = cur + 1;
             break;
 
         case '\n':
         case '\r':
             if (row != NULL)
+	    {
                 *cur = '\0';
+		if (head != 1 && num > 1)
+		  total += atof(start);
+	    }
             goto ret;
 
         default:
@@ -127,9 +138,11 @@ char *handle_one_row_in_buffer(char *buffer, long size, Row *row, int *colnum)
 ret:
     if (colnum != NULL)
         *colnum = num;
+
     if (row != NULL){
         row->nozeros = num - zeros - 2;
         row->cols = num;
+	row->total = total;
     }
 
     return cur < end ? cur + 1 : NULL;
@@ -141,6 +154,7 @@ char *print_row_to_buffer(Row *row, char *cache)
     int    zeros = 0;
     int    totals = 0;
     int    cols = row->cols;
+    double total = 0;
     char **colvalues = row->colvalues;
 
     for (col = 0; col < cols; col++)
@@ -149,6 +163,7 @@ char *print_row_to_buffer(Row *row, char *cache)
         {
             char *colvalue = colvalues[col];
             sprintf(cache, "%s\t", colvalue);
+	    total += atof(colvalue);
             cache += strlen(cache);
             if (*colvalue == '0' && *(colvalue+1) == '\0')
                 zeros++;
@@ -157,9 +172,10 @@ char *print_row_to_buffer(Row *row, char *cache)
     }
 
     if (row->nozeros == -1)
-      sprintf(cache, "total\tlefttotal\n");
+      sprintf(cache, "total\ttotalavg\tlefttotal\tlefttotalavg\n");
     else
-      sprintf(cache, "%d\t%d\n", row->nozeros, totals - zeros - 2);
+      sprintf(cache, "%d\t%f\t%d\t%f\n", row->nozeros, row->total/row->nozeros, 
+	      totals - zeros - 2, total/(totals - zeros - 2));
     cache += strlen(cache);
 
     return cache;
