@@ -222,14 +222,15 @@ char *print_row_to_buffer(Row *row, char *cache)
     printf("[DEBUG] %f\t%f\n\n",  row->sumvalue, sumvalue);
 #endif
     if (row->nozeros == -1)
-        sprintf(cache, "total\ttotalavg\tlefttotal\tlefttotalavg\n");
+        sprintf(cache, "total_count\ttotal_value\ttotal_avg\tleft_count\tleft_value\tleft_avg\n");
     else
     {
         double totalavg = row->nozeros <= 0 ? 0 : row->sumvalue/row->nozeros;
         int    lefttotal = (totals - zeros - 2);
         double lefttotalavg = lefttotal <= 0 ? 0 : (sumvalue / lefttotal);
-        sprintf(cache, "%d\t%f\t%d\t%f\n", row->nozeros, totalavg, 
-                lefttotal, lefttotalavg);
+        sprintf(cache, "%d\t%f\t%f\t%d\t%f\t%f\n", 
+                row->nozeros, row->sumvalue, totalavg, 
+                lefttotal, sumvalue, lefttotalavg);
     }
     cache += strlen(cache);
 
@@ -375,7 +376,7 @@ void handle_data_in_buffer(
 
     handle_data_by_filter(table, filterId, filter);
 
-    cache = (char*)malloc(size + table->rows * 60);
+    cache = (char*)malloc(size + table->rows * 100);
     printf("[INFO] malloc cache [%p——%p]\n", cache, (char*)cache + table->rows * 20);
     cacheSize = print_table_to_buffer(table, cache);
 
