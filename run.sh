@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rm -f analyze stdout.txt *~ core.* data/*.minimal.txt
+rm -f analyze test/stdout.txt *~ core.* data/*.minimal.txt
 if [ "x$1" = "xrelease" ]; then
     gcc -O2 analyze.cpp -o analyze
 
