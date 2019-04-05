@@ -226,7 +226,9 @@ char *print_row_to_buffer(Row *row, char *cache)
 {
     int     col = 0;
     int     curcols = row->curcols;
+    int     validcols = row->validcols;
     int     mcurcols = row->mcurcols;
+    int     mvalidcols = row->mvalidcols;
     Column *columns = row->columns;
 
     for (col = 0; col < mcurcols + 2; col++)
@@ -240,16 +242,18 @@ char *print_row_to_buffer(Row *row, char *cache)
     }
 
     if (row->curcols == -1)
-        sprintf(cache, "total\tsumXn\tsumXXn\tavg\tspearman\tpearson\t"
-                "mtotal\tmsumXn\tmsumXXn\tmavg\tmspearman\tmpearson\n");
+        sprintf(cache, "total\tsumXn\tsumXXn\tavgall\tavgvalid\tspearman\tpearson\t"
+                "mtotal\tmsumXn\tmsumXXn\tmavgall\tmavgvalid\tmspearman\tmpearson\n");
     else
     {
-        double totalavg = curcols <= 0 ? 0 : (row->sumXn / curcols);
-        double mtotalavg = mcurcols <= 0 ? 0 : (row->msumXn / mcurcols);
-        sprintf(cache, "%d\t%f\t%f\t%f\t%f\t%f\t%d\t%f\t%f\t%f\t%f\t%f\n", 
-                curcols, row->sumXn, row->sumXXn, totalavg, 
+        double avgall = curcols <= 0 ? 0 : (row->sumXn / curcols);
+        double avgvalid = validcols <= 0 ? 0 : (row->sumXn / validcols);
+        double mavgall = mcurcols <= 0 ? 0 : (row->msumXn / mcurcols);
+        double mavgvalid = mvalidcols <= 0 ? 0 : (row->msumXn / mvalidcols);
+        sprintf(cache, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%f\t%f\t%f\t%f\t%f\t%f\n", 
+                curcols, row->sumXn, row->sumXXn, avgall, avgvalid,
                 row->spearman, row->pearson,
-                mcurcols, row->msumXn, row->msumXXn, mtotalavg, 
+                mcurcols, row->msumXn, row->msumXXn, mavgall, mavgvalid,
                 row->mspearman, row->mpearson);
     }
     cache += strlen(cache);
@@ -597,7 +601,7 @@ void handle_data_in_buffer(
 
     calc_the_spearman(table, filterrow, false);
 
-    cache = (char*)malloc(size + table->totalrows * 100);
+    cache = (char*)malloc(size + table->totalrows * 200);
     printf("[INFO] malloc cache [%p——%p]\n", cache, (char*)cache + table->totalrows * 20);
     cacheSize = print_table_to_buffer(table, cache);
 
