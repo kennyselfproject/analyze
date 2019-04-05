@@ -3,13 +3,19 @@
 #include <stdlib.h>
 #include <errno.h>
 
+typedef struct tagColumn
+{
+    double  value;
+    char   *strvalue;
+}Column;
+
 typedef struct tagRow
 {
     int     cols;
     int     colmax;
     int     nozeros;
     double  sumvalue;
-    char   *colvalues[0];
+    Column  columns[0];
 }Row;
 
 typedef struct tagTable
@@ -103,34 +109,15 @@ char *handle_one_row_in_buffer(char *buffer, long size, Row *row, int *colnum)
         case ' ':
         case '\t':
         case '\0':
-        {
-            if (row != NULL)
-	    {
-                *cur = '\0';
-                if (*start == '0' && (*(start+1) == '\0'))
-                    zeros++;
-                else
-                {
-                    if (head == 0 && num > 2)
-                    {
-                        double value = atof(start);
-                        sumvalue += value;
-#ifdef _DEBUG
-                        printf("[DEBUG] sum:%f\tvalue:%f\n", sumvalue, value);
-#endif
-                    }
-                }
-	    }
-            start = cur + 1;
-        }
-        break;
-
         case '\n':
         case '\r':
         {
+            char old = *cur;
             if (row != NULL)
-            {
+	    {
                 *cur = '\0';
+                row->columns[num].value = 0;
+                row->columns[num].strvalue = start;
 
                 if (*start == '0' && (*(start+1) == '\0'))
                     zeros++;
@@ -140,25 +127,26 @@ char *handle_one_row_in_buffer(char *buffer, long size, Row *row, int *colnum)
                     {
                         double value = atof(start);
                         sumvalue += value;
+                        row->columns[num].value = value;
 #ifdef _DEBUG
-                        printf("[DEBUG] sum:%f\tvalue:%f\n\n", sumvalue, value);
+                        printf("[DEBUG] sum:%f\tvalue:%f\n", sumvalue, value);
 #endif
                     }
                 }
+	    }
+            num++;
+            if (old == '\n' || old == '\r')
+            {
+                cur++;
+                goto ret;
             }
-            cur++;
+            else
+                start = cur + 1;
         }
-        goto ret;
+        break;
+
 
         default:
-            if (cur == start)
-            {
-                if (row != NULL)
-                    row->colvalues[num] = start;
-
-                num++;
-            }
-
             break;
         }
     }
@@ -180,12 +168,12 @@ ret:
 char *print_row_to_buffer(Row *row, char *cache)
 {
     static int head = 1;
-    int    col = 0;
-    int    zeros = 0;
-    int    totals = 0;
-    int    cols = row->cols;
-    double sumvalue = 0;
-    char **colvalues = row->colvalues;
+    int     col = 0;
+    int     zeros = 0;
+    int     totals = 0;
+    int     cols = row->cols;
+    double  sumvalue = 0;
+    Column *columns = row->columns;
 
 #ifdef _DEBUG
     printf("[DEBUG] ***************************************************\n");
@@ -193,9 +181,9 @@ char *print_row_to_buffer(Row *row, char *cache)
 
     for (col = 0; col < cols; col++)
     {
-        if (colvalues[col] != NULL)
+        if (columns[col].strvalue != NULL)
         {
-            char *colvalue = colvalues[col];
+            char *colvalue = columns[col].strvalue;
             sprintf(cache, "%s\t", colvalue);
             cache += strlen(cache);
             if (*colvalue == '0' && *(colvalue+1) == '\0')
@@ -273,7 +261,8 @@ Row *find_row_by_filter(Table *table, int filterId, char *filter)
 
         if (filterId < row->cols)
         {
-            if (strcmp(row->colvalues[filterId], filter) == 0)
+            Column *column = row->columns + filterId;
+            if (strcmp(column->strvalue, filter) == 0)
                 break;
         }
     }
@@ -294,17 +283,17 @@ void empty_table_column(Table *table, int col)
 
         if (col < row->cols)
         {
-            row->colvalues[col] = NULL;
+            row->columns[col].strvalue = NULL;
         }
     }
 }
 
 void handle_data_by_filter(Table *table, int filterId, char *filter)
 {
-    Row   *row = find_row_by_filter(table, filterId, filter);
-    char **colvalues = NULL;
-    int    cols = 0;
-    int    col = 0;
+    Row    *row = find_row_by_filter(table, filterId, filter);
+    Column *columns = NULL;
+    int     cols = 0;
+    int     col = 0;
 
     if (row == NULL)
     {
@@ -315,10 +304,10 @@ void handle_data_by_filter(Table *table, int filterId, char *filter)
     }
 
     cols = row->cols;
-    colvalues = row->colvalues;
+    columns = row->columns;
     for (col = 2; col < cols; col++)
     {
-        double value = atof(colvalues[col]);
+        double value = atof(columns[col].strvalue);
         if (value > 0)
             continue;
 #ifdef _DEBUG
@@ -333,6 +322,7 @@ void handle_data_in_buffer(
         char *buffer, long size, int filterId, char *filter, char *targetFile)
 {
     int   num = 0;
+    int   rowlen = 0;
     long  cacheSize = 0;
     char *cache = NULL;
     char *current = buffer;
@@ -344,18 +334,18 @@ void handle_data_in_buffer(
     // get the column number
     handle_one_row_in_buffer(buffer, size, (Row*)NULL, &num);
 
-    Table *table = (Table*)malloc(sizeof(Table) + ROWS * sizeof(char*));
+    Table *table = (Table*)malloc(sizeof(Table) + ROWS * sizeof(Row*));
     printf("[INFO] malloc table [%p——%p]\n", 
-           table, (char*)table + sizeof(Table) + ROWS * sizeof(char*));
+           table, (char*)table + sizeof(Table) + ROWS * sizeof(Row*));
     table->rows = 0;
     table->rowmax = ROWS;
+    rowlen = sizeof(Row) + num * sizeof(Column);
     
     do
     {
-        Row *row = (Row*)malloc(sizeof(Row) + num * sizeof(char*));
+        Row *row = (Row*)malloc(rowlen);
 #ifdef _DEBUG
-        printf("[INFO] malloc row [%p——%p]\n", 
-            row, (char*)row + sizeof(Row) + num * sizeof(char*));
+        printf("[INFO] malloc row [%p——%p]\n", row, (char*)row + rowlen);
 #endif
 
         row->cols = 0;
