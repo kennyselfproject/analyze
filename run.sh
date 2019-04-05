@@ -7,13 +7,13 @@ if [ "x$1" = "xrelease" ]; then
     chmod +x analyze
 
     echo "********************handle the GSE98638_HCC.TCell.S5063.TPM.txt**********************"
-    ./analyze GSE98638_HCC.TCell.S5063.TPM.txt GSE98638_HCC.TCell.S5063.TPM.minimal.txt PADI4
+    ./analyze data/GSE98638_HCC.TCell.S5063.TPM.txt data/GSE98638_HCC.TCell.S5063.TPM.minimal.txt PADI4
 
     echo "*******************handle the GSE99254_NSCLC.TCell.S12346.TPM.txt********************"
-    ./analyze GSE99254_NSCLC.TCell.S12346.TPM.txt GSE99254_NSCLC.TCell.S12346.TPM.minimal.txt PADI4
+    ./analyze data/GSE99254_NSCLC.TCell.S12346.TPM.txt data/GSE99254_NSCLC.TCell.S12346.TPM.minimal.txt PADI4
 
     echo "*******************handle the GSE108989_CRC.TCell.S11138.TPM.txt********************"
-    ./analyze GSE108989_CRC.TCell.S11138.TPM.txt GSE108989_CRC.TCell.S11138.TPM.minimal.txt PADI4
+    ./analyze data/GSE108989_CRC.TCell.S11138.TPM.txt data/GSE108989_CRC.TCell.S11138.TPM.minimal.txt PADI4
 else
     # gcc -g3 -D_DEBUG analyze.cpp -o analyze
     gcc -g3  analyze.cpp -o analyze
