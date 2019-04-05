@@ -20,7 +20,7 @@ else
 
     chmod +x analyze
 
-    ./analyze test/test.data test/stdout.txt PADI4
+    ./analyze test/test.txt test/stdout.txt PADI4
 
     result=`diff test/expect.txt test/stdout.txt`
     echo ""
