@@ -242,18 +242,18 @@ char *print_row_to_buffer(Row *row, char *cache)
     }
 
     if (row->curcols == -1)
-        sprintf(cache, "total\tsumXn\tsumXXn\tavgall\tavgvalid\tspearman\tpearson\t"
-                "mtotal\tmsumXn\tmsumXXn\tmavgall\tmavgvalid\tmspearman\tmpearson\n");
+        sprintf(cache, "total\tnozeros\tsumXn\tsumXXn\tavgall\tavgvalid\tspearman\tpearson\t"
+                "mtotal\tmnozeros\tmsumXn\tmsumXXn\tmavgall\tmavgvalid\tmspearman\tmpearson\n");
     else
     {
         double avgall = curcols <= 0 ? 0 : (row->sumXn / curcols);
         double avgvalid = validcols <= 0 ? 0 : (row->sumXn / validcols);
         double mavgall = mcurcols <= 0 ? 0 : (row->msumXn / mcurcols);
         double mavgvalid = mvalidcols <= 0 ? 0 : (row->msumXn / mvalidcols);
-        sprintf(cache, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%f\t%f\t%f\t%f\t%f\t%f\n", 
-                curcols, row->sumXn, row->sumXXn, avgall, avgvalid,
+        sprintf(cache, "%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\n", 
+                curcols, validcols, row->sumXn, row->sumXXn, avgall, avgvalid,
                 row->spearman, row->pearson,
-                mcurcols, row->msumXn, row->msumXXn, mavgall, mavgvalid,
+                mcurcols, mvalidcols, row->msumXn, row->msumXXn, mavgall, mavgvalid,
                 row->mspearman, row->mpearson);
     }
     cache += strlen(cache);
