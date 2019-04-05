@@ -7,21 +7,22 @@ if [ "x$1" = "xrelease" ]; then
     chmod +x analyze
 
     echo "********************handle the GSE98638_HCC.TCell.S5063.TPM.txt**********************"
-    ./analyze GSE98638_HCC.TCell.S5063.TPM.txt GSE98638_HCC.TCell.S5063.TPM.minimal.txt 1 PADI4
+    ./analyze GSE98638_HCC.TCell.S5063.TPM.txt GSE98638_HCC.TCell.S5063.TPM.minimal.txt PADI4
 
     echo "*******************handle the GSE99254_NSCLC.TCell.S12346.TPM.txt********************"
-    ./analyze GSE99254_NSCLC.TCell.S12346.TPM.txt GSE99254_NSCLC.TCell.S12346.TPM.minimal.txt 1 PADI4
+    ./analyze GSE99254_NSCLC.TCell.S12346.TPM.txt GSE99254_NSCLC.TCell.S12346.TPM.minimal.txt PADI4
 
     echo "*******************handle the GSE108989_CRC.TCell.S11138.TPM.txt********************"
-    ./analyze GSE108989_CRC.TCell.S11138.TPM.txt GSE108989_CRC.TCell.S11138.TPM.minimal.txt 1 PADI4
+    ./analyze GSE108989_CRC.TCell.S11138.TPM.txt GSE108989_CRC.TCell.S11138.TPM.minimal.txt PADI4
 else
-    gcc -g3 -D_DEBUG analyze.cpp -o analyze
+    # gcc -g3 -D_DEBUG analyze.cpp -o analyze
+    gcc -g3  analyze.cpp -o analyze
 
     chmod +x analyze
 
-    ./analyze test.txt stdout.txt 1 PADI4
+    ./analyze test/test.data test/stdout.txt PADI4
 
-    result=`diff expect.txt stdout.txt`
+    result=`diff test/expect.txt test/stdout.txt`
     echo ""
 
     if [ "x$result" = "x" ]; then

@@ -54,13 +54,13 @@ int main(int argc, char *argv[])
     case 2:
         sourceFile = argv[1];
     case 1:
-        printf("[INFO] the source file [%s], target file [%s]\n", 
-               sourceFile, targetFile);
+        printf("[INFO] the source file [%s], target file [%s], filter [%s], filterId [%d]\n", 
+               sourceFile, targetFile, filter, filterId);
         break;
 
     default:
         printf("The command syntax as following:\n"
-               "\t%s [source_file [target_file]]",
+               "\t%s [source_file [target_file [filter [filterId]]]]",
                argv[0]);
         exit(1);
         break;
