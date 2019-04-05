@@ -5,6 +5,7 @@
 
 typedef struct tagColumn
 {
+    int     id;
     double  value;
     char   *strvalue;
 }Column;
@@ -54,6 +55,7 @@ void  handle_data_in_buffer(
 void  handle_data_by_filter(Table *table, Row *filterrow);
 Row  *find_row_by_filter(Table *table, int filterId, char *filter);
 
+int compare_column( const void *arg1, const void *arg2 ) ;
 void  calc_one_row_spearman(Row *filterrow, Row *row, bool isfull);
 void  calc_the_spearman(Table *table, Row *filterrow, bool isfull);
 
@@ -67,6 +69,10 @@ long  print_table_to_buffer(Table *table, char *cache);
 
 #define CALC_LXY(sumXYn, sumXn, sumYn, n) ((sumXYn) - ((sumXn) * (sumYn) / (n)))
 #define CALC_LXX(sumXXn, sumXn, n) CALC_LXY((sumXXn), (sumXn), (sumXn), n)
+
+#define CALC_POWER(x) ((x) * (x))
+#define CALC_N_NN_1(n) ((n) * (CALC_POWER(n) - 1))
+#define CALC_SPEARMAN(d, n)   (1 - ((6*(d))/CALC_N_NN_1(n)))
 
 int main(int argc, char *argv[])
 {
@@ -146,6 +152,7 @@ char *handle_one_row_in_buffer(char *buffer, long size, Row *row, int *totalcols
             if (row != NULL)
 	    {
                 *cur = '\0';
+                row->columns[colnum].id = colnum - 1;
                 row->columns[colnum].value = 0;
                 row->columns[colnum].strvalue = start;
 
@@ -218,10 +225,11 @@ ret:
 char *print_row_to_buffer(Row *row, char *cache)
 {
     int     col = 0;
-    int     totalcols = row->totalcols;
+    int     curcols = row->curcols;
+    int     mcurcols = row->mcurcols;
     Column *columns = row->columns;
 
-    for (col = 0; col < totalcols; col++)
+    for (col = 0; col < mcurcols + 2; col++)
     {
         if (columns[col].strvalue != NULL)
         {
@@ -236,12 +244,12 @@ char *print_row_to_buffer(Row *row, char *cache)
                 "mtotal\tmsumXn\tmsumXXn\tmavg\tmspearman\tmpearson\n");
     else
     {
-        double totalavg = row->curcols <= 0 ? 0 : (row->sumXn / row->curcols);
-        double mtotalavg = row->mcurcols <= 0 ? 0 : (row->msumXn / row->mcurcols);
+        double totalavg = curcols <= 0 ? 0 : (row->sumXn / curcols);
+        double mtotalavg = mcurcols <= 0 ? 0 : (row->msumXn / mcurcols);
         sprintf(cache, "%d\t%f\t%f\t%f\t%f\t%f\t%d\t%f\t%f\t%f\t%f\t%f\n", 
-                row->curcols, row->sumXn, row->sumXXn, totalavg, 
+                curcols, row->sumXn, row->sumXXn, totalavg, 
                 row->spearman, row->pearson,
-                row->mcurcols, row->msumXn, row->msumXXn, mtotalavg, 
+                mcurcols, row->msumXn, row->msumXXn, mtotalavg, 
                 row->mspearman, row->mpearson);
     }
     cache += strlen(cache);
@@ -267,17 +275,91 @@ long print_table_to_buffer(Table *table, char *cache)
     return current - cache;
 }
 
+int compare_column( const void *arg1, const void *arg2 ) 
+{ 
+    Column *column1 = (Column*)arg1;
+    Column *column2 = (Column*)arg2;
+
+    if (column1->value > column2->value)
+        return 1;
+    else if (column1->value < column2->value)
+        return -1;
+    else 
+        return 0;
+}
+
 void  calc_one_row_spearman(Row *filterrow, Row *row, bool isfull)
 {
+    int     col = 0;
+    int     curcols = isfull ? filterrow->curcols : filterrow->mcurcols;
+    double  d = 0;
+    Column *filtercolumns = filterrow->columns;
+    Column *columns = row->columns;
+
+    if (filterrow->curcols != row->curcols || 
+        filterrow->mcurcols != filterrow->mcurcols)
+        return;
+
+    for (col = 2; col < curcols + 2; col++)
+    {
+        d += CALC_POWER(columns[col].id - filtercolumns[col].id);
+    }
+
+    if (isfull)
+    {
+        row->spearman = CALC_SPEARMAN(d, curcols);
+#ifdef _DEBUG
+        printf("++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+        printf("d [%f] curcols [%d] spearman [%f]\n", d, curcols, row->spearman);
+        printf("---------------------------------------------------\n");
+#endif
+
+    }
+    else
+    {
+        row->mspearman = CALC_SPEARMAN(d, curcols);
+#ifdef _DEBUG
+        printf("++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+        printf("d [%f] mcurcols [%d] mspearman [%f]\n", d, curcols, row->mspearman);
+        printf("---------------------------------------------------\n");
+#endif
+    }
 }
 
 void  calc_the_spearman(Table *table, Row *filterrow, bool isfull)
 {
+    Row    *oldrow = NULL;
+    Row    *newrow = NULL;
+    int     rowlen = 0;
+    int     totalrows = 0;
+    int     row = 1;
+    int     curcols = isfull ? filterrow->curcols : filterrow->mcurcols;
+
     if (filterrow == NULL)
     {
         printf("[INFO] there are nothing to do by spearman, filterrow is null\n");
 
         return;
+    }
+
+    rowlen = sizeof(Row) + filterrow->maxcols * sizeof(Column);
+    oldrow = (Row*)malloc(rowlen);
+    newrow = (Row*)malloc(rowlen);
+
+    memcpy(oldrow, filterrow, rowlen);
+    qsort(oldrow->columns + 2, curcols, sizeof(Column), compare_column);
+
+    totalrows = table->totalrows;
+    for (row = 1; row < totalrows; row++)
+    {
+        Row *tmprow = table->rowvalues[row];
+        memcpy(newrow, tmprow, rowlen);
+        qsort(newrow->columns + 2, curcols, sizeof(Column), compare_column);
+        calc_one_row_spearman(oldrow, newrow, isfull);
+        if (isfull)
+            tmprow->spearman = newrow->spearman;
+        else
+            tmprow->mspearman = newrow->mspearman;
     }
 }
 
@@ -288,6 +370,7 @@ void  calc_one_row_pearson(Row *filterrow, Row *row, bool isfull)
     double Lxy = 0;
     
     int     col = 0;
+    int     curcols = isfull ? filterrow->curcols : filterrow->mcurcols;
     int     totalcols = filterrow->totalcols;
     double  sumXYn = 0;
     Column *filtercolumns = filterrow->columns;
@@ -306,9 +389,9 @@ void  calc_one_row_pearson(Row *filterrow, Row *row, bool isfull)
     {
         row->sumXYn = sumXYn;
 
-        Lxx = CALC_LXX(filterrow->sumXXn, filterrow->sumXn, filterrow->curcols);
-        Lyy = CALC_LXX(row->sumXXn, row->sumXn, row->curcols);
-        Lxy = CALC_LXY(row->sumXYn, filterrow->sumXn, row->sumXn, row->curcols);
+        Lxx = CALC_LXX(filterrow->sumXXn, filterrow->sumXn, curcols);
+        Lyy = CALC_LXX(row->sumXXn, row->sumXn, curcols);
+        Lxy = CALC_LXY(row->sumXYn, filterrow->sumXn, row->sumXn, curcols);
 
         if (Lxx == 0 || Lyy == 0)
             row->pearson = 0;
@@ -317,8 +400,8 @@ void  calc_one_row_pearson(Row *filterrow, Row *row, bool isfull)
 
 #ifdef _DEBUG
         printf("++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-        printf("sumXn [%f] sumXXn[%f] curcols [%d]\n", filterrow->sumXn, filterrow->sumXXn, filterrow->curcols);
-        printf("sumYn [%f] sumYYn[%f] curcols [%d]\n", row->sumXn, row->sumXXn, row->curcols);
+        printf("sumXn [%f] sumXXn[%f] curcols [%d]\n", filterrow->sumXn, filterrow->sumXXn, curcols);
+        printf("sumYn [%f] sumYYn[%f] curcols [%d]\n", row->sumXn, row->sumXXn, curcols);
 
         printf("sumXYn[%f] lxx [%f] lyy [%f] lxy [%f]\n", row->sumXYn, Lxx, Lyy, Lxy);
         printf("---------------------------------------------------\n");
@@ -328,9 +411,9 @@ void  calc_one_row_pearson(Row *filterrow, Row *row, bool isfull)
     {
         row->msumXYn = sumXYn;
 
-        Lxx = CALC_LXX(filterrow->msumXXn, filterrow->msumXn, filterrow->mcurcols);
-        Lyy = CALC_LXX(row->msumXXn, row->msumXn, row->mcurcols);
-        Lxy = CALC_LXY(row->msumXYn, filterrow->msumXn, row->msumXn, row->mcurcols);
+        Lxx = CALC_LXX(filterrow->msumXXn, filterrow->msumXn, curcols);
+        Lyy = CALC_LXX(row->msumXXn, row->msumXn, curcols);
+        Lxy = CALC_LXY(row->msumXYn, filterrow->msumXn, row->msumXn, curcols);
 
         if (Lxx == 0 || Lyy == 0)
             row->mpearson = 0;
@@ -339,8 +422,8 @@ void  calc_one_row_pearson(Row *filterrow, Row *row, bool isfull)
 
 #ifdef _DEBUG
         printf("****************************************************\n");
-        printf("msumXn [%f] msumXXn[%f] mcurcols [%d]\n", filterrow->msumXn, filterrow->msumXXn, filterrow->mcurcols);
-        printf("msumYn [%f] msumYYn[%f] mcurcols [%d]\n", row->msumXn, row->msumXXn, row->mcurcols);
+        printf("msumXn [%f] msumXXn[%f] mcurcols [%d]\n", filterrow->msumXn, filterrow->msumXXn, curcols);
+        printf("msumYn [%f] msumYYn[%f] mcurcols [%d]\n", row->msumXn, row->msumXXn, curcols);
 
         printf("msumXYn[%f] lxx [%f] lyy [%f] lxy [%f]\n", row->msumXYn, Lxx, Lyy, Lxy);
         printf("---------------------------------------------------\n");
@@ -379,47 +462,60 @@ Row *find_row_by_filter(Table *table, int filterId, char *filter)
 
     for (i = 0; i < totalrows; i++)
     {
-        row = rowvalues[i];
-
-        if (filterId < row->totalcols)
+        Row *tmprow = rowvalues[i];
+        if (filterId < tmprow->totalcols)
         {
-            Column *column = row->columns + filterId;
+            Column *column = tmprow->columns + filterId;
             if (strcmp(column->strvalue, filter) == 0)
+            {
+                int rowlen = sizeof(Row) + tmprow->maxcols * sizeof(Column);
+                row = (Row*)malloc(rowlen);
+                memcpy(row, tmprow, rowlen);
                 break;
+            }
         }
     }
 
-    return i < totalrows ? row : NULL;
+    return row;
 }
 
-void empty_table_column(Table *table, int col)
+void filter_columns_of_one_row(Row *row, Row *filterrow)
 {
-    int   i = 0;
-    Row  *row = NULL;
-    int   totalrows = table->totalrows;
-    Row **rowvalues = table->rowvalues;
+    Column *filtercolumns = filterrow->columns;
+    Column *columns = row->columns;
+    int     totalcols = filterrow->totalcols;
+    int     col = 0;
+    int     curcol = 2;
+    int     validcols = 0;
 
-    for (i = 0; i < totalrows; i++)
+    for (col = 2; col < totalcols; col++)
     {
-        row = rowvalues[i];
-
-        if (col < row->totalcols)
+        if (filtercolumns[col].value > 0)
         {
-            double value = row->columns[col].value;
+            memcpy(columns + curcol, columns + col, sizeof(Column));
+            columns[curcol].id = curcol - 1;
+            if (columns[curcol].value > 0)
+                validcols++;
+            curcol++;
+        }
+        else
+        {
+            double value = columns[col].value;
 
-            row->columns[col].strvalue = NULL;
-            row->columns[col].value = 0;
             row->msumXn -= value;
             row->msumXXn -= value * value;
         }
     }
+
+    row->mcurcols = curcol - 2;
+    row->mvalidcols = validcols;
+    memset(columns + curcol, 0, (totalcols - curcol) * sizeof(Column));
 }
 
 void handle_data_by_filter(Table *table, Row *filterrow)
 {
-    Column *columns = NULL;
-    int     totalcols = 0;
-    int     col = 0;
+    int     row = 0;
+    int     totalrows = 0;
 
     if (filterrow == NULL)
     {
@@ -428,19 +524,15 @@ void handle_data_by_filter(Table *table, Row *filterrow)
         return;
     }
 
-    table->leftcols = filterrow->curcols;
-    totalcols = filterrow->totalcols;
-    columns = filterrow->columns;
-    for (col = 2; col < totalcols; col++)
-    {
-        if (columns[col].value > 0)
-            continue;
-#ifdef _DEBUG
-        printf("[INFO] remove column [%d]\n", col);
-#endif
+    table->leftcols = filterrow->mvalidcols;
 
-        empty_table_column(table, col);
+    totalrows = table->totalrows;
+    for (row = 0; row < totalrows; row++)
+    {
+        filter_columns_of_one_row(table->rowvalues[row], filterrow);
     }
+
+    filter_columns_of_one_row(filterrow, filterrow);
 }
 
 void handle_data_in_buffer(
@@ -492,15 +584,18 @@ void handle_data_in_buffer(
 
     filterrow = find_row_by_filter(table, filterId, filter);
 
-    calc_the_spearman(table, filterrow, true);
-
     calc_the_pearson(table, filterrow, true);
+
+    calc_the_spearman(table, filterrow, true);
 
     handle_data_by_filter(table, filterrow);
 
-    calc_the_spearman(table, filterrow, false);
+    // filterrow have been changed, flush the data
+    filterrow = find_row_by_filter(table, filterId, filter);
 
     calc_the_pearson(table, filterrow, false);
+
+    calc_the_spearman(table, filterrow, false);
 
     cache = (char*)malloc(size + table->totalrows * 100);
     printf("[INFO] malloc cache [%p——%p]\n", cache, (char*)cache + table->totalrows * 20);
